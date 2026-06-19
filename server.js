@@ -82,7 +82,7 @@ async function run() {
         res
             .cookie("token", token, {
                 httpOnly: true,
-                secure: false,
+                secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
             })
 
@@ -94,7 +94,7 @@ async function run() {
         res
             .clearCookie("token", {
                 httpOnly: true,
-                secure: false,
+                secure: process.env.NODE_ENV === "production",
                 sameSite: "lax",
             })
             .send({success:true});
@@ -121,8 +121,10 @@ async function run() {
                 query.carType = carType;
             }
 
+            console.log("query =", query);
+
             const result = await carsCollection
-                .find(query)
+                .find(query).sort({createdAt: -1})
                 .toArray();
 
             res.send(result);
@@ -165,7 +167,7 @@ async function run() {
     // my added cars api
     app.get("/my-cars", verifyToken, async(req, res) => {
         try{
-        const email = req.query.email;
+        const email = req.user.email;
 
         if(email !== req.user.email){
             return res.status(403).send({
@@ -211,12 +213,10 @@ async function run() {
             _id: new ObjectId(id),
         });
 
+        if(!car) return res.status(404).send({message: "Car not found"});
+
         // owner check
-        if(car.ownerEmail !== req.user.email){
-            return res.status(403).send({
-                message: "Forbidden Access",
-            });
-        }
+        if(car.ownerEmail !== req.user.email) return res.status(403).send({ message: "Forbidden Access" });
 
         const result = await carsCollection.updateOne(
             { _id: new ObjectId(id)},
@@ -245,12 +245,11 @@ async function run() {
             _id: new ObjectId(id),
         });
 
+        if(!car) return res.status(404).send({message: "Car not found"});
+        
+
         // owner check
-        if(car.ownerEmail !== req.user.email){
-            return res.status(403).send({
-                message: "Forbidden Access",
-            });
-        }
+        if(car.ownerEmail !== req.user.email) return res.status(403).send({ message: "Forbidden Access" });
 
         const result = await carsCollection.deleteOne({
             _id: new ObjectId(id),
@@ -348,6 +347,18 @@ async function run() {
         );
 
         // decrease 
+        if(booking.status !== "cancelled") {
+            await carsCollection.updateOne(
+                {
+                    _id: new ObjectId(booking.carId),
+                },
+                {
+                    $inc: {
+                        bookingCount: -1,
+                    },
+                }
+            );
+        }
 
         res.send(result)
     });
@@ -382,7 +393,7 @@ app.get("/", (req, res) => {
     res.send("DriveFleet server Running");
 });
 
-const port = process.env.PORT;
+const port = process.env.PORT || 5000;
 
 app.listen(port, () => {
     console.log(`server running on ${port}`);
