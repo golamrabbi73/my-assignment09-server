@@ -122,8 +122,6 @@ async function run() {
                 query.carType = carType;
             }
 
-            console.log("query =", query);
-
             const result = await carsCollection
                 .find(query).sort({createdAt: -1})
                 .toArray();
@@ -159,7 +157,6 @@ async function run() {
 
             res.send(result);
         } catch(error){
-            console.log(error);
 
             res.status(500).send({message: "Failed to add car"});
         }
